@@ -1,22 +1,10 @@
-import { useEffect, useState } from 'react'
-import './App.css'
-
-const API_URL = import.meta.env.VITE_API_URL
-
 function App() {
-  const [status, setStatus] = useState('memuat...')
-
-  useEffect(() => {
-    fetch(`${API_URL}/health`)
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status))
-      .catch(() => setStatus('gagal terhubung ke backend'))
-  }, [])
-
   return (
-    <main>
-      <h1>GearHub</h1>
-      <p>Status backend: {status}</p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-brand-blue">
+      <h1 className="text-5xl font-bold text-white">GearHub</h1>
+      <button className="rounded-2xl bg-brand-yellow px-10 py-3 font-semibold text-black">
+        Tombol tes
+      </button>
     </main>
   )
 }
