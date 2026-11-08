@@ -1,11 +1,21 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
+import HomePage from './pages/HomePage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+
 function App() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-brand-blue">
-      <h1 className="text-5xl font-bold text-white">GearHub</h1>
-      <button className="rounded-2xl bg-brand-yellow px-10 py-3 font-semibold text-black">
-        Tombol tes
-      </button>
-    </main>
+    <Routes>
+      <Route element={<GuestRoute />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/daftar" element={<RegisterPage />} />
+      </Route>
+      <Route element={<ProtectedRoute />}>
+        <Route path="/beranda" element={<HomePage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/beranda" replace />} />
+    </Routes>
   )
 }
 
