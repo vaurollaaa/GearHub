@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from auth import router as auth_router
 from database import engine
+from gears import router as gears_router
 
 app = FastAPI(title="GearHub API")
 
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(gears_router)
 
 
 @app.get("/health")
