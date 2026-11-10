@@ -3,48 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import FormField from '../components/FormField'
 import { ArrowLeftIcon, CheckIcon, IdCardIcon, UserIcon } from '../components/icons'
 import PhotoPicker from '../components/PhotoPicker'
+import Stepper from '../components/Stepper'
 import { useAuth } from '../context/AuthContext'
 import { apiRequest } from '../lib/api'
 import { CAMPUSES } from '../lib/campuses'
 
 const STEPS = ['Foto KTM', 'Selfie', 'Cek data']
-
-function Stepper({ step }) {
-  return (
-    <ol className="flex items-start" aria-label="Langkah verifikasi">
-      {STEPS.map((label, i) => {
-        const number = i + 1
-        const done = number < step
-        const current = number === step
-        return (
-          <li key={label} className="relative flex flex-1 flex-col items-center gap-1.5">
-            {i > 0 && (
-              <span
-                aria-hidden="true"
-                className={`absolute right-1/2 top-3.5 h-0.5 w-full -translate-y-1/2 ${
-                  number <= step ? 'bg-brand-blue' : 'bg-neutral-300'
-                }`}
-              />
-            )}
-            <span
-              aria-current={current ? 'step' : undefined}
-              className={`relative flex size-7 items-center justify-center rounded-full border-2 text-xs font-semibold ${
-                done
-                  ? 'border-brand-blue bg-brand-blue text-white'
-                  : current
-                    ? 'border-brand-blue bg-white text-brand-blue'
-                    : 'border-neutral-300 bg-white text-neutral-400'
-              }`}
-            >
-              {done ? <CheckIcon className="size-4" /> : number}
-            </span>
-            <span className="text-xs text-neutral-600">{label}</span>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}
 
 function Tips({ items }) {
   return (
@@ -148,7 +112,7 @@ export default function VerificationPage() {
       </header>
 
       <div className="mt-6">
-        <Stepper step={step} />
+        <Stepper steps={STEPS} step={step} />
       </div>
 
       {step === 1 && (

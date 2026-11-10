@@ -31,6 +31,9 @@ export function RequireVerified() {
       >
         Verifikasi sekarang
       </Link>
+      <Link to="/beranda" className="mt-4 block text-sm text-neutral-600 underline">
+        Kembali ke Beranda
+      </Link>
     </div>
   )
 }
