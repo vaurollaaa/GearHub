@@ -7,6 +7,7 @@ export function useApi(path) {
   const [result, setResult] = useState({ path: null, data: null, error: '' })
 
   useEffect(() => {
+    if (!path) return
     let cancelled = false
     apiRequest(path, { token })
       .then((data) => {
@@ -20,10 +21,11 @@ export function useApi(path) {
     }
   }, [path, token])
 
-  const loading = result.path !== path
+  const loading = Boolean(path) && result.path !== path
+  const ready = Boolean(path) && !loading
   return {
-    data: loading ? null : result.data,
-    error: loading ? '' : result.error,
+    data: ready ? result.data : null,
+    error: ready ? result.error : '',
     loading,
   }
 }

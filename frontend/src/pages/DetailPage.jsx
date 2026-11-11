@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import AvailabilityCalendar from '../components/AvailabilityCalendar'
 import { ArrowLeftIcon, PinIcon, StarIcon } from '../components/icons'
+import { useAuth } from '../context/AuthContext'
 import { formatRupiah, initials } from '../lib/format'
 import { useApi } from '../lib/useApi'
 
@@ -11,9 +13,12 @@ export default function DetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const { data: gear, loading, error } = useApi(`/gears/${id}`)
+  const { data: bookings } = useApi(`/gears/${id}/bookings`)
   const [tab, setTab] = useState('Ringkasan')
   const [slide, setSlide] = useState(0)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const sliderRef = useRef(null)
 
   function goBack() {
@@ -37,6 +42,8 @@ export default function DetailPage() {
       </div>
     )
   }
+
+  const isOwner = gear.owner.id === user.id
 
   return (
     <div className="mx-auto max-w-5xl pb-10 lg:grid lg:grid-cols-2 lg:gap-10 lg:px-8 lg:py-10">
@@ -91,11 +98,21 @@ export default function DetailPage() {
           </p>
           <p className="flex items-center gap-1 text-lg">
             <StarIcon className="size-5 text-brand-yellow" />
-            {gear.rating_avg.toFixed(1)} ({gear.rating_count})
+            {gear.rating_count > 0
+              ? `${gear.rating_avg.toFixed(1)} (${gear.rating_count})`
+              : 'Baru'}
           </p>
         </div>
 
-        <div className="mt-5 flex items-center gap-3 border-y border-neutral-200 py-4">
+        <button
+          type="button"
+          onClick={() => setCalendarOpen(true)}
+          className="mt-2 text-sm text-neutral-700 underline"
+        >
+          Cek ketersediaan
+        </button>
+
+        <div className="mt-4 flex items-center gap-3 border-y border-neutral-200 py-4">
           <span className="flex size-12 items-center justify-center rounded-xl bg-linear-to-b from-brand-yellow to-amber-600 text-lg font-bold text-white">
             {initials(gear.owner.full_name)}
           </span>
@@ -157,13 +174,27 @@ export default function DetailPage() {
           )}
         </div>
 
-        <button
-          type="button"
-          className="mt-6 w-full rounded-2xl bg-brand-yellow py-4 text-lg font-semibold text-black"
-        >
-          Ajukan sewa
-        </button>
+        {isOwner ? (
+          <p className="mt-6 rounded-xl bg-neutral-100 px-4 py-3 text-center text-sm text-neutral-700">
+            Ini gear milikmu.
+          </p>
+        ) : (
+          <Link
+            to={`/gear/${gear.id}/sewa`}
+            className="mt-6 block w-full rounded-2xl bg-brand-yellow py-4 text-center text-lg font-semibold text-black"
+          >
+            Ajukan sewa
+          </Link>
+        )}
       </div>
+
+      {calendarOpen && (
+        <AvailabilityCalendar
+          gear={gear}
+          bookings={bookings ?? []}
+          onClose={() => setCalendarOpen(false)}
+        />
+      )}
     </div>
   )
 }

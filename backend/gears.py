@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from auth import get_current_user
 from database import get_db
-from models import Gear, GearImage, GearItem, GearSpec, User
+from models import Gear, GearImage, GearItem, GearSpec, Rental, User
 from permissions import require_verified
 from verification import CLOUDINARY_PREFIX
 
@@ -109,6 +109,11 @@ class GearCreate(BaseModel):
         if self.available_until < self.available_from:
             raise ValueError("Tanggal akhir tidak boleh sebelum tanggal mulai")
         return self
+
+
+class BookedRange(BaseModel):
+    start_date: date
+    end_date: date
 
 
 def sorted_image_urls(gear: Gear) -> list[str]:
@@ -219,3 +224,20 @@ def get_gear(
             verification_status=owner.verification_status,
         ),
     )
+
+
+@router.get("/{gear_id}/bookings", response_model=list[BookedRange])
+def gear_bookings(
+    gear_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    stmt = select(Rental).where(
+        Rental.gear_id == gear_id,
+        Rental.status.in_(("pending", "active")),
+        Rental.end_date >= date.today(),
+    )
+    return [
+        BookedRange(start_date=r.start_date, end_date=r.end_date)
+        for r in db.scalars(stmt).all()
+    ]

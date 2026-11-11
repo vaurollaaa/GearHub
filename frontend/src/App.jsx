@@ -8,8 +8,10 @@ import HelpPage from './pages/HelpPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import MyGearsPage from './pages/MyGearsPage'
+import PaymentPage from './pages/PaymentPage'
 import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
+import RentRequestPage from './pages/RentRequestPage'
 import SearchPage from './pages/SearchPage'
 import VerificationPage from './pages/VerificationPage'
 
@@ -38,6 +40,8 @@ function App() {
 
         <Route element={<RequireVerified />}>
           <Route path="/tambah-gear" element={<AddGearPage />} />
+          <Route path="/gear/:id/sewa" element={<RentRequestPage />} />
+          <Route path="/gear/:id/bayar" element={<PaymentPage />} />
         </Route>
         <Route path="/gear/:id" element={<DetailPage />} />
         <Route path="/verifikasi" element={<VerificationPage />} />
