@@ -30,3 +30,21 @@ export function isDayAvailable(iso, gear, bookings, today) {
   if (gear.available_until && iso > gear.available_until) return false
   return !bookings.some((b) => iso >= b.start_date && iso < b.end_date)
 }
+
+export function formatShortRange(start, end) {
+  const fmt = (iso, withYear) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      ...(withYear ? { year: 'numeric' } : {}),
+    })
+  return `${fmt(start, false)} - ${fmt(end, true)}`
+}
+
+// Batas pengembalian dianggap akhir hari tanggal return.
+export function timeLeftText(endISO) {
+  const ms = new Date(`${endISO}T23:59:59`) - new Date()
+  if (ms <= 0) return 'Sudah melewati batas pengembalian'
+  const hours = Math.floor(ms / 3600000)
+  return `Kembali dalam ${Math.floor(hours / 24)} hari ${hours % 24} jam`
+}

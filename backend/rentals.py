@@ -2,13 +2,22 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Gear, Rental, User
+from models import (
+    ConditionCheck,
+    ConditionCheckPhoto,
+    Gear,
+    GearImage,
+    GearItem,
+    Rental,
+    User,
+)
 from permissions import require_verified
+from verification import CLOUDINARY_PREFIX
 
 router = APIRouter(prefix="/rentals", tags=["rentals"])
 
@@ -55,6 +64,58 @@ class RentalOut(BaseModel):
 class RentalCreated(BaseModel):
     rental: RentalOut
     balance: int
+
+
+class RentalItem(BaseModel):
+    id: int
+    status: str
+    gear_id: int
+    gear_name: str
+    gear_image: str | None
+    owner_name: str
+    start_date: date
+    end_date: date
+    rental_price: int
+    service_fee: int
+    deposit_amount: int
+    total_amount: int
+    payment_method: str | None
+    has_before: bool
+    has_after: bool
+    after_condition: str | None
+
+
+class RentalDetail(RentalItem):
+    gear_items: list[str]
+    before_missing: list[str]
+
+
+class CheckCreate(BaseModel):
+    check_type: Literal["before", "after"]
+    condition: Literal["baik", "ada_kerusakan"]
+    notes: str = Field(default="", max_length=800)
+    missing_items: list[str] = Field(default_factory=list, max_length=20)
+    photo_urls: list[str] = Field(min_length=1, max_length=6)
+
+    @field_validator("photo_urls")
+    @classmethod
+    def check_photos(cls, urls: list[str]) -> list[str]:
+        for url in urls:
+            if not url.startswith(CLOUDINARY_PREFIX) or len(url) > 500:
+                raise ValueError("URL foto tidak valid")
+        return urls
+
+    @field_validator("missing_items")
+    @classmethod
+    def clean_missing(cls, items: list[str]) -> list[str]:
+        return [i.strip()[:150] for i in items if i.strip()]
+
+
+class CheckResult(BaseModel):
+    status: str
+    balance: int
+    deposit_refunded: bool | None
+    newly_missing: list[str]
 
 
 def get_active_gear(db: Session, gear_id: int, lock: bool = False) -> Gear:
@@ -122,6 +183,66 @@ def build_quote(db: Session, gear: Gear, start: date, end: date, user: User) -> 
     )
 
 
+def split_missing(value: str) -> list[str]:
+    return [line for line in value.split("\n") if line]
+
+
+def rental_rows(db: Session, *conditions):
+    stmt = (
+        select(Rental, Gear, User)
+        .join(Gear, Gear.id == Rental.gear_id)
+        .join(User, User.id == Gear.owner_id)
+        .where(*conditions)
+        .order_by(Rental.id.desc())
+    )
+    return db.execute(stmt).all()
+
+
+def build_items(db: Session, rows) -> list[RentalItem]:
+    if not rows:
+        return []
+
+    gear_ids = {gear.id for _, gear, _ in rows}
+    first_image: dict[int, str] = {}
+    images = db.scalars(
+        select(GearImage).where(GearImage.gear_id.in_(gear_ids)).order_by(GearImage.position)
+    ).all()
+    for img in images:
+        first_image.setdefault(img.gear_id, img.url)
+
+    checks: dict[tuple[int, str], ConditionCheck] = {}
+    rental_ids = [rental.id for rental, _, _ in rows]
+    for check in db.scalars(
+        select(ConditionCheck).where(ConditionCheck.rental_id.in_(rental_ids))
+    ).all():
+        checks[(check.rental_id, check.check_type)] = check
+
+    items = []
+    for rental, gear, owner in rows:
+        after = checks.get((rental.id, "after"))
+        items.append(
+            RentalItem(
+                id=rental.id,
+                status=rental.status,
+                gear_id=gear.id,
+                gear_name=gear.name,
+                gear_image=first_image.get(gear.id),
+                owner_name=owner.full_name,
+                start_date=rental.start_date,
+                end_date=rental.end_date,
+                rental_price=rental.rental_price,
+                service_fee=rental.service_fee,
+                deposit_amount=rental.deposit_amount,
+                total_amount=rental.total_amount,
+                payment_method=rental.payment_method,
+                has_before=(rental.id, "before") in checks,
+                has_after=after is not None,
+                after_condition=after.condition if after else None,
+            )
+        )
+    return items
+
+
 @router.get("/quote", response_model=QuoteOut)
 def get_quote(
     gear_id: int,
@@ -132,6 +253,37 @@ def get_quote(
 ):
     gear = get_active_gear(db, gear_id)
     return build_quote(db, gear, start_date, end_date, user)
+
+
+@router.get("/mine", response_model=list[RentalItem])
+def my_rentals(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_verified),
+):
+    return build_items(db, rental_rows(db, Rental.renter_id == user.id))
+
+
+@router.get("/{rental_id}", response_model=RentalDetail)
+def get_rental(
+    rental_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_verified),
+):
+    rows = rental_rows(db, Rental.id == rental_id, Rental.renter_id == user.id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Sewa tidak ditemukan")
+    item = build_items(db, rows)[0]
+    gear_items = db.scalars(select(GearItem.name).where(GearItem.gear_id == item.gear_id)).all()
+    before = db.scalars(
+        select(ConditionCheck).where(
+            ConditionCheck.rental_id == rental_id, ConditionCheck.check_type == "before"
+        )
+    ).first()
+    return RentalDetail(
+        **item.model_dump(),
+        gear_items=list(gear_items),
+        before_missing=split_missing(before.missing_items) if before else [],
+    )
 
 
 @router.post("", response_model=RentalCreated, status_code=201)
@@ -168,3 +320,73 @@ def create_rental(
     db.refresh(rental)
     db.refresh(user)
     return RentalCreated(rental=RentalOut.model_validate(rental), balance=user.balance)
+
+
+@router.post("/{rental_id}/check", response_model=CheckResult, status_code=201)
+def submit_condition_check(
+    rental_id: int,
+    payload: CheckCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_verified),
+):
+    rental = db.scalars(
+        select(Rental).where(Rental.id == rental_id).with_for_update()
+    ).first()
+    if rental is None or rental.renter_id != user.id:
+        raise HTTPException(status_code=404, detail="Sewa tidak ditemukan")
+
+    if payload.check_type == "before" and rental.status != "pending":
+        raise HTTPException(
+            status_code=400, detail="Cek kondisi awal hanya bisa saat sewa menunggu pengambilan"
+        )
+    if payload.check_type == "after" and rental.status != "active":
+        raise HTTPException(
+            status_code=400, detail="Pengembalian hanya bisa setelah cek kondisi awal selesai"
+        )
+
+    check = ConditionCheck(
+        rental_id=rental.id,
+        check_type=payload.check_type,
+        condition=payload.condition,
+        notes=payload.notes.strip(),
+        missing_items="\n".join(payload.missing_items),
+        photos=[ConditionCheckPhoto(url=u, position=i) for i, u in enumerate(payload.photo_urls)],
+    )
+    db.add(check)
+
+    deposit_refunded: bool | None = None
+    newly_missing: list[str] = []
+    if payload.check_type == "before":
+        rental.status = "active"
+    else:
+        before = db.scalars(
+            select(ConditionCheck).where(
+                ConditionCheck.rental_id == rental.id, ConditionCheck.check_type == "before"
+            )
+        ).first()
+        already_missing = set(split_missing(before.missing_items)) if before else set()
+        newly_missing = [i for i in payload.missing_items if i not in already_missing]
+
+        # SIMULASI penyelesaian: uang sewa ke pemilik. Deposit kembali ke penyewa hanya
+        # bila kondisi baik DAN tidak ada kelengkapan baru yang hilang; selain itu ditahan
+        # penuh dan diberikan ke pemilik.
+        gear = db.get(Gear, rental.gear_id)
+        owner = db.scalars(select(User).where(User.id == gear.owner_id).with_for_update()).first()
+        db.refresh(user, with_for_update=True)
+        owner.balance += rental.rental_price
+        if payload.condition == "baik" and not newly_missing:
+            user.balance += rental.deposit_amount
+            deposit_refunded = True
+        else:
+            owner.balance += rental.deposit_amount
+            deposit_refunded = False
+        rental.status = "completed"
+
+    db.commit()
+    db.refresh(user)
+    return CheckResult(
+        status=rental.status,
+        balance=user.balance,
+        deposit_refunded=deposit_refunded,
+        newly_missing=newly_missing,
+    )

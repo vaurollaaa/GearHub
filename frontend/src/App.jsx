@@ -1,8 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import { GuestRoute, ProtectedRoute, RequireVerified } from './components/RouteGuards'
+import ActivityPage from './pages/ActivityPage'
 import AddGearPage from './pages/AddGearPage'
 import ComingSoonPage from './pages/ComingSoonPage'
+import ConditionCheckPage from './pages/ConditionCheckPage'
 import DetailPage from './pages/DetailPage'
 import HelpPage from './pages/HelpPage'
 import HomePage from './pages/HomePage'
@@ -34,7 +36,7 @@ function App() {
           <Route path="/bantuan" element={<HelpPage />} />
           <Route element={<RequireVerified />}>
             <Route path="/gear-saya" element={<MyGearsPage />} />
-            <Route path="/aktivitas" element={<ComingSoonPage title="Aktivitas sewa" />} />
+            <Route path="/aktivitas" element={<ActivityPage />} />
           </Route>
         </Route>
 
@@ -42,6 +44,7 @@ function App() {
           <Route path="/tambah-gear" element={<AddGearPage />} />
           <Route path="/gear/:id/sewa" element={<RentRequestPage />} />
           <Route path="/gear/:id/bayar" element={<PaymentPage />} />
+          <Route path="/aktivitas/:id/cek" element={<ConditionCheckPage />} />
         </Route>
         <Route path="/gear/:id" element={<DetailPage />} />
         <Route path="/verifikasi" element={<VerificationPage />} />

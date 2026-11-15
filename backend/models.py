@@ -1,6 +1,17 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -96,22 +107,27 @@ class Rental(Base):
 
 class ConditionCheck(Base):
     __tablename__ = "condition_checks"
+    __table_args__ = (UniqueConstraint("rental_id", "check_type", name="uq_check_rental_type"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    rental_id: Mapped[int] = mapped_column(ForeignKey("rentals.id"), index=True)
-    # "before" atau "after"
-    check_type: Mapped[str] = mapped_column(String(20))
-    # "baik" atau "ada_kerusakan"
-    condition: Mapped[str] = mapped_column(String(20))
-    notes: Mapped[str | None] = mapped_column(Text)
+    rental_id: Mapped[int] = mapped_column(ForeignKey("rentals.id", ondelete="CASCADE"), index=True)
+    check_type: Mapped[str] = mapped_column(String(10))  # "before" | "after"
+    condition: Mapped[str] = mapped_column(String(20))  # "baik" | "ada_kerusakan"
+    notes: Mapped[str] = mapped_column(Text, default="")
+    missing_items: Mapped[str] = mapped_column(Text, default="")  # satu nama per baris
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    photos: Mapped[list["ConditionCheckPhoto"]] = relationship(cascade="all, delete-orphan")
+    photos: Mapped[list["ConditionCheckPhoto"]] = relationship(
+        cascade="all, delete-orphan", order_by="ConditionCheckPhoto.position"
+    )
 
 
 class ConditionCheckPhoto(Base):
     __tablename__ = "condition_check_photos"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    check_id: Mapped[int] = mapped_column(ForeignKey("condition_checks.id"), index=True)
+    check_id: Mapped[int] = mapped_column(
+        ForeignKey("condition_checks.id", ondelete="CASCADE"), index=True
+    )
     url: Mapped[str] = mapped_column(String(500))
+    position: Mapped[int] = mapped_column(Integer, default=0)
